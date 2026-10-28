@@ -60,7 +60,8 @@ or private source reports with the public code export.
 - Optional extension: actually load/run one SKAI scene in a simulator; record it.
 - Optional extension: Cosmos model inference on Thor after access/environment checks.
 - Record/edit the demo video, add captions, and verify the public video link.
-- Completed: independent installation. Publish the reviewed source-filtered candidate.
+- Completed: independent installation and standalone public source repository:
+  https://github.com/xli431/corexense-n-hackathon . The original repository remains private.
 - Completed: `docs/JUDGE_RUNBOOK.md` provides local reproduction after credits expire. Offline replay stays
   labeled; do not promise a live endpoint that will be unavailable.
 - Transfer the final description/video/repository links into Devpost and verify

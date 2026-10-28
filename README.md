@@ -8,6 +8,8 @@ The submission is a software review prototype. It does not control robot motors.
 Use Python 3.11+:
 
 ```sh
+git clone https://github.com/xli431/corexense-n-hackathon.git
+cd corexense-n-hackathon
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[test]'
@@ -100,7 +102,8 @@ FIRA background acknowledgments: Voxel51 FiftyOne for data inspection, SKAI
 Intelligent for simulation support, and HawkRobo for earlier FIRA sponsorship.
 These credits do not imply a new partnership or endorsement of this submission.
 
-Judge-access arrangements after cloud credit expiry remain to be completed.
+Offline reproduction remains available after cloud credit expiry. New live
+inference requires valid Nebius account access.
 
 See `docs/SUBMISSION_STORY.md` for the submission draft and
 `docs/SPRINT_CLOSEOUT.md` for verified results and remaining steps. SKAI course

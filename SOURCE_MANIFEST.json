@@ -303,7 +303,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "f44e2fd1d5834f4659b5d997eb26bb6fca8d77a7a1dcaacaa6d837c5873fb7c2"
+      "sha256": "e471c06771e7cf280630ccbf7498bc3ce1fd2edbbd4f164c375f13a2d1ec7001"
     },
     {
       "path": "docs/SUBMISSION_STORY.md",
@@ -311,7 +311,7 @@
     },
     {
       "path": "docs/SPRINT_CLOSEOUT.md",
-      "sha256": "f2ba93b1f7ae4076ac06a3e77c6d0fcf2042f06ef373e8850f386ce0e7404c2c"
+      "sha256": "c351b0786904d928fc804bb423fc0fb1fbb3f1867d5a4fdb24fe9664bb77e18b"
     },
     {
       "path": "docs/ETH_METHOD_BRIDGE.md",
