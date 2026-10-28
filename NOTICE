@@ -1,0 +1,4 @@
+CoreXense-N submission candidate.
+Preserve licenses/coresense-NOTICE and licenses/coresense-Apache-2.0.txt.
+src/tws_belief is vendored unchanged under MIT; see vendor/tws-belief/LICENSE
+and vendor/tws-belief/provenance.json. Apache-2.0 does not replace that license.
