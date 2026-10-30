@@ -1,147 +1,78 @@
-# CoreXense-N: An MCP Evidence Gateway for Physical AI
-
-## Elevator pitch
-
-An MCP evidence gateway that checks what supports an AI decision, whether it is
-still applicable, and why a physical-AI workflow should continue or pause.
-
 ## Inspiration
 
-A model can give a convincing answer even when the evidence behind it is no
-longer valid.
+CoreXense-N is a general-purpose MCP evidence gateway I built for Physical AI, based on my previously published CoreSense/TWS work. It validates evidence, requests bounded re-observation, and traces why a workflow pauses — returning HOLD, re-observe, or proceed before an action is trusted.
 
-For Physical AI, this creates a practical problem. A camera frame may be stale,
-two sensors may repeat the same upstream observation, or a cloud model may return
-a recommendation after the scene has changed.
+It is currently a software review prototype and does not control robot motors. Local, deterministic checks and evidence freshness remain authoritative; NVIDIA Nemotron, hosted on Nebius Token Factory, adds a bounded semantic review (at most 2–3 calls per walkthrough). Next, the gateway will connect to physical systems through a separate supervised controller: its HOLD / re-observe / proceed decisions will be enforced by a deterministic local gate with e-stop, speed, force, and workspace limits — the gateway itself will never drive actuators directly.
 
-Our agricultural robotics exploration with FIRA made this concrete. A simulated
-placement sequence can look convincing while a later step still lacks sufficient
-validation. We wanted a place between model judgment and application permission
-where those gaps become visible.
+The gateway is domain-general. One application included in this submission is a replay audit of episodes from the FIRA agricultural robotics project (review_simulation_episode — replay-only, always non-executable): an application of the tool, not its origin.
 
-Our vision is an MCP evidence gateway for Physical AI: a reusable layer that
-checks the observations supporting a decision, requests additional evidence when
-appropriate, and records why a workflow continued or paused.
+What inspired it: AI systems increasingly act on evidence they did not generate in the moment — prior episodes, sensor records, tool outputs, and model judgments. But evidence that looks relevant is not necessarily current, applicable, or trustworthy. A stale record can look highly relevant. Two records can conflict. A fluent model judgment can be wrong about the physical world. In consequential workflows, treating evidence as authority creates a quiet but serious failure mode: the system acts confidently, for the wrong reason.
+
+CoreXense-N is built around one principle:
+
+> **Evidence is evidence — not authority.**
 
 ## What it does
 
-CoreXense-N exposes five MCP tools for evidence review and explanation. It checks
-local evidence, performs bounded semantic review when configured, checks validity
-again after the model responds, and records the decision in a hash-linked trace.
-TWS-Belief examples demonstrate how delayed and conflicting claims can be
-reconstructed at a specified decision time.
+CoreXense-N is an evidence-governance layer, exposed as an MCP server. It ships five tools: `list_scenarios`, `review_scenario`, `review_episode`, `explain_belief`, and `review_simulation_episode`. For each piece of candidate evidence, it returns one of three decisions — **PROCEED** (fresh, supported, applicable), **RE-OBSERVE** (insufficient; a bounded re-observation is requested), or **HOLD** (stale, conflicting, or unsafe to rely on — the workflow pauses, with the reason recorded). Every decision comes with an explanation trace, so a pause is never a black box.
 
-The interface exposes no robot motor commands. Historical simulation records
-remain non-executable even if a model approves their contents.
+## How I built it
 
-## How we built it
+CoreXense-N separates semantic judgment from decision authority:
 
-We connected an actual MCP stdio client and server to deterministic evidence
-checks, bounded reobservation, trace verification and a Nebius Token Factory
-adapter for NVIDIA Nemotron. The model receives structured evidence and must
-return a verdict bound to that request's digest. It cannot change local policy.
+Evidence (episode / record / tool output)
+  → deterministic local checks: freshness, provenance, schema, evidence IDs
+  → NVIDIA Nemotron: bounded structured semantic review (max 2–3 calls)
+  → local policy remains authoritative — a model "allow" cannot override an expired or failed check
+  → PROCEED / RE-OBSERVE / HOLD
+  → hash-chained, auditable decision record
 
-Our FIRA demonstration uses a MuJoCo/RoboSim scene with orange and corn proxies
-and a carton. Its historical event record is connected to the same source digest
-used in the model-assisted review. It uses privileged simulator state and assumed
-physical parameters; it is workflow evidence, not validated real-world grasping.
+The episode-review path first requires local qualification, then a request-bound, validated ALLOW response, and then checks the elapsed audit time. An expired review returns HOLD even when the model says ALLOW. The implementation uses structured verdicts, not a calibrated semantic score.
 
-SKAI Intelligence supported the simulation exploration. We have also located
-local training-course assets containing URDF, USD, mesh, texture and lighting
-files. These provide a concrete starting point for environment-based evaluation.
-Our independent local inspection resolved the URDF mesh references and opened the
-USD composition with ten layers, eleven asset dependencies and no unresolved
-dependencies. A static geometry preview shows the course layout; it omits textures
-and does not run physics.
-Asset inspection, simulation execution, model review and policy training are
-tracked as separate milestones. The new course is not represented as a completed
-closed-loop training experiment.
+Built with **NVIDIA Nemotron** (structured semantic review), **Nebius Token Factory** (live, OpenAI-compatible inference), **Python** (MCP server and policy layer), **TWS-Belief** (vendored, MIT — belief and traceability components), and a **hash-chained ledger** that detects any change to the decision record relative to its retained tip.
 
-Voxel51 FiftyOne supported multimodal data organization and inspection in the
-broader FIRA exploration. HawkRobo supported the earlier FIRA work. These credits
-describe their respective contributions and do not imply endorsement of every
-component of this hackathon submission.
+Live and offline behavior are kept strictly separate: every result records whether it came from a live Token Factory request or a deterministic fixture, and the default semantic reviews are explicit, labelled mocks — an offline success is never presented as a live-model result.
 
-## Why Nebius and NVIDIA matter
+## Challenges I faced
 
-Nebius Token Factory provides the cloud inference endpoint, and NVIDIA Nemotron
-provides the semantic review. Together they let us test the boundary between a
-model recommendation and a locally governed workflow using actual model responses.
+The hardest challenge was not evaluating evidence. It was deciding how much authority a good-looking judgment should have.
 
-In our recorded live run, Nemotron returned ALLOW for a synthetic recovery case.
-By the time the response arrived, the observation had exceeded its configured
-250 ms validity window. CoreXense-N kept the workflow on HOLD. A separate slip
-case was blocked locally without a model inference request.
+In one recorded live check, the recovery fixture received a model judgment of ALLOW — and the final decision was still HOLD, because the evidence had expired during the audit (a 250 ms synthetic evidence window, $\tau = 250\,\text{ms}$). That is the system working as designed: the model's opinion is advisory; freshness and deterministic checks decide. That window is a synthetic fixture parameter — I am careful not to present it as robot performance or a safety proof.
 
-That result makes the infrastructure relationship visible: cloud reasoning can
-contribute useful evidence without becoming unconditional permission. GPU-based
-scene experiments and Thor edge inference are extension paths, not completed
-Nebius GPU deployment claims.
+A second challenge was output discipline: one live response was truncated at the default 256-token output budget, so structured judgments now run with an explicitly recorded larger budget (`--audit-max-tokens 1024`) rather than silently failing.
 
-## Challenges we faced
+Finally, I kept the gateway deliberately non-executable: the server exposes no actuator tools and no arbitrary filesystem access, so an audit result can inform a controller but can never become one.
 
-Transport success was not enough. One live response reached the configured
-256-token output limit and could not produce a complete verdict. We recorded it
-as unknown and kept the workflow on HOLD. We added diagnostics that distinguish
-truncation, invalid structure, provider failures and an explicit model unknown.
+## What I learned
 
-A separately recorded 1,024-token-budget follow-up produced three complete,
-schema-valid responses using 2,954 reported tokens. Both synthetic approvals
-still resulted in HOLD after evidence expiration. The historical replay received
-an explicit unknown. We preserve both runs: the changing replay verdict shows
-that semantic consistency is still an evaluation question.
+Plausible evidence and valid evidence are different problems. A record can be retrievable, recent-looking, and semantically on-point — and still be expired, contradicted, or out of scope. Reliable use of evidence requires freshness and temporal validity, source provenance, conflict handling, bounded authority, and an explanation a human can audit.
 
-We also had to preserve the boundaries between synthetic fixtures, historical
-simulation, actual cloud inference and future hardware tests. A polished replay
-must not be mistaken for a robot controlled by the model.
+I also learned that open models are most useful when their authority is deliberately constrained: Nemotron contributes semantic reasoning, while deterministic policy retains control over consequential decisions.
 
-## Accomplishments that we are proud of
 
-We built a prototype in which uncertainty changes workflow behavior. It includes
-a deterministic evidence gate, bounded reobservation, an MCP interface, trace
-verification, failure-path tests and a constrained Nebius inference adapter.
 
-Our recorded three-request live run used 2,674 reported tokens. It demonstrated
-local conflict rejection, output-truncation handling, evidence expiration after
-model approval, and historical replay auditing. These are software behavior
-observations, not a model accuracy benchmark or physical safety certification.
+## Testing and results
 
-We are especially proud of separating model judgment from application permission.
-This creates a concrete place to inspect evidence, handle failures, and explain
-why a workflow continued or paused.
+The submission package passed 103 software tests and an independent Linux installation check. Offline evaluation covered 1,920 synthetic policy cases and 17 injected transport contracts. These evaluate software behavior, not robot success or model accuracy.
 
-## What we learned
+### Output-budget tests and repeated runs
 
-Persistent memory and reliable memory are different problems. Storage can retain
-an experience and search can retrieve a similar record; applicability, temporal
-validity, provenance, conflicts and authority still need explicit handling.
+I tested NVIDIA-Nemotron-3-Nano-30B-A3B through Nebius Token Factory. The initial three-request diagnostic run used 2,674 reported tokens and included one truncated response at a 256-token output limit. The recovery fixture received ALLOW but remained HOLD after its evidence expired.
 
-Open models are useful when their authority is deliberately constrained. Nemotron
-contributes structured semantic review, while deterministic policy and human
-escalation retain authority over consequential decisions.
+Two follow-up walkthroughs used a 1,024-token output limit. Each made three cloud requests, using 2,954 and 3,022 reported tokens respectively. Across these six requests, all responses were complete and schema-valid, with no truncation. In both runs, healthy and recovery fixtures received model ALLOW but the gateway returned HOLD because the audit exceeded the configured 250 ms synthetic evidence window. The slip fixture was blocked locally without inference. FIRA replay received unknown and remained non-executable. Both trace checks passed.
+
+These are repeated fixed-input checks, not independent physical trials or a controlled causal experiment. They do not establish model accuracy, reliability rates or a real-time latency guarantee. The larger-budget runs showed no truncation in this small sample; they do not prove that output-budget changes alone caused the difference.
+
+### Preliminary model selection
+
+A separately reported five-model fixture comparison favored Nano-30B: it was the only model reported to pass all three fixture checks, including rejection of the slip case, and had the lowest observed average latency (2,072 ms). Super-120B and Ultra-550B returned ALLOW on that slip fixture; Super-VL and Lightning returned unknown/truncated responses.
+
+This preliminary comparison comes from the run author's terminal summary; the raw comparison JSON and matched configurations have not yet been independently checked. It is not a general model ranking. Truncated outputs are incomplete evidence, and a model ALLOW is not a final gate decision. The slip-model probe is separate from the gateway walkthrough, where slip is blocked before inference.
+
+[Public source and reproduction instructions](https://github.com/xli431/corexense-n-hackathon) · [Test scope and comparison notes](https://github.com/xli431/corexense-n-hackathon/blob/main/docs/MODEL_TEST_RESULTS.md)
 
 ## What's next
 
-Our goal is to make CoreXense-N a reusable governance layer that works with a
-customer's preferred model endpoint. It would add evidence validation, bounded
-authority and auditability while fitting into the team's existing AI stack.
+Commissioning a sensor adapter, so live physical evidence (currently blocked by design) can be reviewed with the same discipline; evidence expiration, revision, and supersession policies; richer adversarial evaluation suites; and a supervised Physical AI workflow in which a HOLD is enforced by a deterministic controller — models may inform a decision, but cannot bypass safety controls or human authority.
 
-The next stage connects SKAI scene assets to reproducible environment variations,
-then links each observation and model review to its scene configuration. Reviewed
-failures can become candidates for targeted data collection and annotation.
-
-For this extension, we draw methodological inspiration from ETH Zurich research
-on [robust multimodal perception](https://leggedrobotics.github.io/rl-perceptiveloco/)
-and [curriculum-based parallel robot learning](https://leggedrobotics.github.io/legged_gym/).
-We plan to start with controlled observation failures in one scene, then increase
-task difficulty. These are research references; we have not reproduced their
-controllers or training results. See `docs/ETH_METHOD_BRIDGE.md` for the design.
-
-PIER-Ego is our longer-term research path for traceable multimodal alignment from
-egocentric demonstrations to robot learning. Cosmos visual reasoning and Thor
-edge inference are prepared pilots. Their contribution to prediction or policy
-learning will require independent evaluation. EEG-derived priors remain exploratory
-and are not part of the functioning hackathon prototype.
-
-We want teams to inspect what supports a decision, check whether that evidence
-still applies, and collect the next observation that resolves the gap.
+CoreXense-N does not make AI systems use more evidence. It makes the evidence they use safer to trust.

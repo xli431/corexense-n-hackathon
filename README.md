@@ -85,6 +85,10 @@ The hash ledger detects changes relative to a retained tip; it does not authenti
 the original source. Real fruit input remains blocked until a sensor adapter is
 commissioned. No supervised physical controller is included.
 
+## Model tests
+
+Two recorded 1,024-token Nano walkthroughs produced six complete, schema-valid responses. Healthy and recovery model ALLOW verdicts still resulted in HOLD after the synthetic evidence window expired. See [model test results](docs/MODEL_TEST_RESULTS.md) for the 256/1,024-token comparison, run IDs, and a separately labeled author-reported five-model summary. These are small fixture checks, not a general model ranking or robot evaluation.
+
 ## Source boundaries and prior work
 
 The core derives from the existing CoreSense/CoreXense-N work; preserve the Apache
